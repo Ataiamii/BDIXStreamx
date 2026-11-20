@@ -1,0 +1,30 @@
+{
+  "repoName": "BDIXStream Official Starter Repo",
+  "version": 1,
+  "plugins": [
+    {
+      "id": "circle_ftp",
+      "name": "Circle FTP",
+      "baseUrl": "http://circleftp.net",
+      "apiType": "wordpress_rest",
+      "latestPath": "/wp-json/wp/v2/posts?per_page=12&_embed",
+      "searchPath": "/wp-json/wp/v2/posts?search={query}&per_page=15&_embed"
+    },
+    {
+      "id": "sam_online",
+      "name": "Sam Online",
+      "baseUrl": "http://172.16.50.4",
+      "apiType": "html_scrape",
+      "latestPath": "/",
+      "searchPath": "/?s={query}"
+    },
+    {
+      "id": "icc_ftp",
+      "name": "ICC FTP",
+      "baseUrl": "http://10.16.100.244",
+      "apiType": "html_scrape",
+      "latestPath": "/",
+      "searchPath": "/search?q={query}"
+    }
+  ]
+}

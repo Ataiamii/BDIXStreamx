@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>BDIXStream — CloudStream-Style BDIX FTP Player</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
+<style>
+  :root {
+    --bg: #09090f;
+    --surface: #12121d;
+    --surface2: #1a1a2a;
+    --border: rgba(255,255,255,0.08);
+    --accent: #8b5cf6;
+    --accent2: #a78bfa;
+    --cyan: #22d3ee;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --text: #f3f4f6;
+    --muted: #9ca3af;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding-bottom: 76px;
+    overflow-x: hidden;
+  }
+  /* Header */
+  header {
+    position: sticky; top: 0; z-index: 40;
+    background: rgba(9,9,15,0.92);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.15rem; letter-spacing: -0.02em; }
+  .brand-icon {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(135deg, #6d28d9, #8b5cf6, #22d3ee);
+    display: grid; place-items: center; font-size: 1rem; color: #fff;
+    box-shadow: 0 4px 16px rgba(139,92,246,0.35);
+  }
+  .badge {
+    font-size: 0.68rem; font-weight: 700; padding: 3px 8px; border-radius: 999px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .badge-native { background: rgba(16,185,129,0.16); color: #34d399; border: 1px solid rgba(16,185,129,0.35); }
+  .badge-web { background: rgba(245,158,11,0.16); color: #fbbf24; border: 1px solid rgba(245,158,11,0.35); }
+
+  /* Tabs */
+  .view { display: none; padding: 14px 16px 24px; max-width: 1120px; margin: 0 auto; }
+  .view.active { display: block; animation: fadeIn 0.18s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  /* Hero */
+  .hero {
+    position: relative; border-radius: 18px; overflow: hidden;
+    background: linear-gradient(135deg, #1e1b4b 0%, #311068 50%, #0f172a 100%);
+    border: 1px solid var(--border); padding: 22px 18px; margin-bottom: 18px;
+  }
+  .hero h1 { font-size: 1.45rem; font-weight: 800; margin-bottom: 6px; line-height: 1.2; }
+  .hero p { color: #d1d5db; font-size: 0.88rem; line-height: 1.45; max-width: 560px; margin-bottom: 14px; }
+  .btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  button, .btn {
+    border: none; outline: none; cursor: pointer; font-family: inherit;
+    font-weight: 600; font-size: 0.84rem; border-radius: 10px;
+    padding: 9px 14px; display: inline-flex; align-items: center; gap: 6px;
+    transition: transform 0.12s ease, opacity 0.12s ease, background 0.15s ease;
+  }
+  button:active { transform: scale(0.97); }
+  .btn-primary { background: linear-gradient(135deg, #7c3aed, #8b5cf6); color: #fff; }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-cyan { background: rgba(34,211,238,0.16); color: #67e8f9; border: 1px solid rgba(34,211,238,0.3); }
+  .btn-danger { background: rgba(239,68,68,0.15); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
+  .btn-sm { padding: 6px 10px; font-size: 0.76rem; border-radius: 8px; }
+
+  /* Filter Pills */
+  .pills { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 16px; scrollbar-width: none; }
+  .pills::-webkit-scrollbar { display: none; }
+  .pill {
+    white-space: nowrap; padding: 7px 13px; border-radius: 999px; font-size: 0.8rem; font-weight: 600;
+    background: var(--surface); color: var(--muted); border: 1px solid var(--border); cursor: pointer;
+  }
+  .pill.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* Section Header */
+  .sec-head { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 10px; gap: 8px; }
+  .sec-title { font-size: 1.02rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .sec-sub { font-size: 0.76rem; color: var(--muted); }
+
+  /* Movie Grid */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(142px, 1fr));
+    gap: 12px;
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    overflow: hidden; cursor: pointer; transition: transform 0.15s ease, border-color 0.15s ease;
+    display: flex; flex-direction: column;
+  }
+  .card:hover { transform: translateY(-2px); border-color: rgba(139,92,246,0.5); }
+  .poster {
+    aspect-ratio: 2 / 3; width: 100%; position: relative;
+    background: linear-gradient(155deg, #1f1f33, #11111d);
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+  }
+  .poster img { width: 100%; height: 100%; object-fit: cover; }
+  .poster-fallback {
+    padding: 12px; text-align: center; font-weight: 800; font-size: 0.9rem;
+    color: #c4b5fd; line-height: 1.25;
+  }
+  .card-tag {
+    position: absolute; top: 8px; left: 8px;
+    background: rgba(9,9,15,0.82); backdrop-filter: blur(6px);
+    color: #e5e7eb; font-size: 0.66rem; font-weight: 700; padding: 3px 7px; border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+  .card-body { padding: 9px 10px 11px; flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 4px; }
+  .card-title { font-size: 0.84rem; font-weight: 700; line-height: 1.28; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card-meta { font-size: 0.72rem; color: var(--muted); display: flex; justify-content: space-between; align-items: center; }
+
+  /* Panels / Inputs */
+  .panel {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 16px; margin-bottom: 14px;
+  }
+  .panel h3 { font-size: 0.98rem; margin-bottom: 8px; }
+  .input-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  input[type="text"], input[type="url"], select, textarea {
+    width: 100%; background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; font-size: 0.88rem; font-family: inherit; outline: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
+
+  /* Extension List */
+  .ext-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 12px; border-radius: 12px; background: var(--surface2);
+    border: 1px solid var(--border); margin-bottom: 10px; flex-wrap: wrap;
+  }
+  .ext-info { flex: 1; min-width: 180px; }
+  .ext-name { font-weight: 700; font-size: 0.92rem; display: flex; align-items: center; gap: 7px; }
+  .ext-url { font-size: 0.76rem; color: var(--muted); word-break: break-all; margin-top: 2px; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--green); }
+  .status-dot.off { background: #6b7280; }
+
+  /* Modal Player */
+  .modal {
+    position: fixed; inset: 0; z-index: 90;
+    background: rgba(5,5,10,0.92); backdrop-filter: blur(10px);
+    display: none; align-items: flex-start; justify-content: center;
+    overflow-y: auto; padding: 14px;
+  }
+  .modal.open { display: flex; }
+  .modal-card {
+    width: 100%; max-width: 780px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 18px; overflow: hidden;
+    margin: auto 0;
+  }
+  .player-wrap { position: relative; background: #000; width: 100%; aspect-ratio: 16 / 9; }
+  video { width: 100%; height: 100%; background: #000; display: block; }
+  .modal-body { padding: 16px; }
+  .modal-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+  .source-list { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0 14px; }
+  .source-chip {
+    padding: 6px 11px; border-radius: 8px; font-size: 0.76rem; font-weight: 600;
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text); cursor: pointer;
+  }
+  .source-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* Log / Diagnostics */
+  .log-box {
+    margin-top: 10px; padding: 10px 12px; border-radius: 10px;
+    background: #0c0c14; border: 1px solid var(--border);
+    font-size: 0.76rem; color: #c4b5fd; line-height: 1.45;
+  }
+
+  /* Bottom Nav */
+  nav.bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+    background: rgba(12,12,20,0.95); backdrop-filter: blur(14px);
+    border-top: 1px solid var(--border);
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    padding: 6px 8px 10px;
+  }
+  .nav-btn {
+    background: transparent; color: var(--muted); border-radius: 10px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; padding: 6px 4px; font-size: 0.7rem; font-weight: 600;
+  }
+  .nav-btn .ico { font-size: 1.15rem; }
+  .nav-btn.active { color: var(--accent2); background: rgba(139,92,246,0.12); }
+
+  .empty { text-align: center; padding: 34px 16px; color: var(--muted); font-size: 0.88rem; }
+  .toast {
+    position: fixed; bottom: 84px; left: 50%; transform: translateX(-50%);
+    background: #1f1f30; color: #fff; border: 1px solid rgba(139,92,246,0.45);
+    padding: 9px 16px; border-radius: 999px; font-size: 0.82rem; font-weight: 600;
+    z-index: 120; display: none; box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-icon">&#9654;</div>
+    <span>BDIXStream</span>
+  </div>
+  <span id="runtimeBadge" class="badge badge-web">Web Preview</span>
+</header>
+
+<!-- HOME VIEW -->
+<section id="view-home" class="view active">
+  <div class="hero">
+    <h1>Your BDIX Cinema &amp; Extensions Hub</h1>
+    <p>Stream directly from Circle FTP, Sam Online, ICC FTP, or add custom GitHub extension repositories. Built-in native CORS bypass inside the Android APK lets you fetch live catalogs directly from your ISP servers.</p>
+    <div class="btn-row">
+      <button class="btn-primary" onclick="fetchAllEnabled()">&#9889; Live Fetch Servers</button>
+      <button class="btn-secondary" onclick="openDirectUrlModal()">&#128279; Play Stream URL</button>
+      <button class="btn-cyan" onclick="switchTab('extensions')">&#129513; Add GitHub Repo</button>
+    </div>
+    <div id="liveStatusBox" class="log-box" style="display:none;"></div>
+  </div>
+
+  <div class="pills" id="serverPills"></div>
+
+  <div id="liveCatalogSection" style="display:none;">
+    <div class="sec-head">
+      <div class="sec-title">&#127760; Live From Your BDIX Servers</div>
+      <span id="liveCount" class="sec-sub"></span>
+    </div>
+    <div class="grid" id="liveGrid"></div>
+  </div>
+
+  <div class="sec-head">
+    <div class="sec-title">&#127916; Built-in Demo &amp; Test Streams</div>
+    <span class="sec-sub">Always playable</span>
+  </div>
+  <div class="grid" id="demoGrid"></div>
+</section>
+
+<!-- SEARCH VIEW -->
+<section id="view-search" class="view">
+  <div class="panel">
+    <h3>Search Across Enabled BDIX Extensions</h3>
+    <div class="input-row">
+      <input id="searchInput" type="text" placeholder="Search movies, series, 1080p, Hindi, Bangla..." onkeydown="if(event.key==='Enter') runGlobalSearch()" style="flex:1; min-width:200px;" />
+      <button class="btn-primary" onclick="runGlobalSearch()">Search</button>
+    </div>
+    <div id="searchStatus" class="log-box" style="display:none;"></div>
+  </div>
+  <div class="grid" id="searchGrid"></div>
+</section>
+
+<!-- EXTENSIONS VIEW -->
+<section id="view-extensions" class="view">
+  <div class="panel">
+    <h3>&#128230; Add GitHub Extension Repository</h3>
+    <p style="font-size:0.8rem;color:var(--muted);margin-bottom:10px;">
+      Paste a GitHub <code>repo.json</code> URL (both <code>github.com/.../blob/...</code> and <code>raw.githubusercontent.com</code> links work).
+    </p>
+    <div class="input-row">
+      <input id="repoUrlInput" type="url" placeholder="https://github.com/username/repo/blob/main/repo.json" style="flex:1; min-width:220px;" />
+      <button class="btn-primary" onclick="installGithubRepo()">Install Repo</button>
+    </div>
+    <div style="margin-top:10px;" class="btn-row">
+      <button class="btn-secondary btn-sm" onclick="exportRepoJson()">&#128228; Copy repo.json to Host on GitHub</button>
+      <button class="btn-secondary btn-sm" onclick="resetDefaultExtensions()">&#8634; Reset Defaults</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>&#129513; Installed Extensions (<span id="extCount">0</span>)</h3>
+    <div id="extensionsList"></div>
+  </div>
+
+  <div class="panel">
+    <h3>&#10133; Add Custom BDIX Server Extension</h3>
+    <div class="field">
+      <label>Server Name</label>
+      <input id="newExtName" type="text" placeholder="e.g. DFlix / Discovery FTP / RoarZone" />
+    </div>
+    <div class="field">
+      <label>Base URL (HTTP or HTTPS)</label>
+      <input id="newExtUrl" type="url" placeholder="http://172.16.50.4" />
+    </div>
+    <div class="field">
+      <label>Parser Type</label>
+      <select id="newExtType">
+        <option value="wordpress_rest">WordPress REST API (Circle FTP style)</option>
+        <option value="html_scrape">HTML Portal / Directory Scraper (Sam Online / ICC FTP style)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Search Path Pattern (use {query})</label>
+      <input id="newExtSearch" type="text" value="/?s={query}" />
+    </div>
+    <button class="btn-primary" onclick="addCustomExtension()">Save Extension</button>
+  </div>
+</section>
+
+<!-- WATCHLIST VIEW -->
+<section id="view-watchlist" class="view">
+  <div class="sec-head">
+    <div class="sec-title">&#11088; Saved Watchlist</div>
+    <button class="btn-secondary btn-sm" onclick="clearWatchlist()">Clear All</button>
+  </div>
+  <div class="grid" id="watchlistGrid"></div>
+</section>
+
+<!-- PLAYER MODAL -->
+<div id="playerModal" class="modal" onclick="if(event.target===this) closePlayer()">
+  <div class="modal-card">
+    <div class="player-wrap">
+      <video id="videoPlayer" controls playsinline crossorigin="anonymous"></video>
+    </div>
+    <div class="modal-body">
+      <div class="modal-top">
+        <div>
+          <h2 id="modalTitle" style="font-size:1.12rem;font-weight:800;">Title</h2>
+          <div id="modalSub" style="font-size:0.78rem;color:var(--muted);margin-top:3px;">Source</div>
+        </div>
+        <button class="btn-secondary btn-sm" onclick="closePlayer()">&#10005; Close</button>
+      </div>
+
+      <div id="sourceList" class="source-list"></div>
+
+      <div class="btn-row" style="margin-bottom:12px;">
+        <button id="btnWatchlistToggle" class="btn-secondary btn-sm" onclick="toggleCurrentWatchlist()">&#11088; Watchlist</button>
+        <button class="btn-cyan btn-sm" onclick="openInExternal('org.videolan.vlc')">&#127916; Open in VLC</button>
+        <button class="btn-cyan btn-sm" onclick="openInExternal('com.mxtech.videoplayer.ad')">&#9654; MX Player</button>
+        <button class="btn-secondary btn-sm" onclick="openInExternal('')">&#128241; Other Player</button>
+        <button class="btn-secondary btn-sm" onclick="copyCurrentStream()">&#128203; Copy URL</button>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:0.78rem;color:var(--muted);">
+        <label>Speed:
+          <select id="speedSelect" onchange="document.getElementById('videoPlayer').playbackRate=parseFloat(this.value)" style="width:auto;padding:4px 8px;margin-left:4px;">
+            <option value="0.75">0.75x</option>
+            <option value="1" selected>1.0x</option>
+            <option value="1.25">1.25x</option>
+            <option value="1.5">1.5x</option>
+            <option value="2">2.0x</option>
+          </select>
+        </label>
+        <label style="cursor:pointer;">
+          &#128172; Load Subtitle (.vtt/.srt)
+          <input type="file" accept=".vtt,.srt" onchange="loadSubtitleFile(event)" style="display:none;" />
+        </label>
+        <button id="btnOpenPortal" class="btn-secondary btn-sm" style="display:none;" onclick="openCurrentPortal()">&#127760; Open Portal Page</button>
+      </div>
+      <div id="playerNote" class="log-box" style="display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- DIRECT URL MODAL -->
+<div id="urlModal" class="modal" onclick="if(event.target===this) closeUrlModal()">
+  <div class="modal-card" style="max-width:500px;">
+    <div class="modal-body">
+      <div class="modal-top">
+        <h3>Play Direct BDIX / HTTP / HLS Stream</h3>
+        <button class="btn-secondary btn-sm" onclick="closeUrlModal()">&#10005;</button>
+      </div>
+      <div class="field">
+        <label>Stream URL (.mp4, .mkv, .m3u8)</label>
+        <input id="directStreamInput" type="url" placeholder="http://172.16.50.4/movies/movie.mp4" />
+      </div>
+      <div class="field">
+        <label>Title (optional)</label>
+        <input id="directStreamTitle" type="text" placeholder="My BDIX Movie" />
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="playDirectStream()">Play Now</button>
+        <button class="btn-secondary" onclick="closeUrlModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <button class="nav-btn active" data-tab="home" onclick="switchTab('home')"><span class="ico">&#127968;</span>Home</button>
+  <button class="nav-btn" data-tab="search" onclick="switchTab('search')"><span class="ico">&#128269;</span>Search</button>
+  <button class="nav-btn" data-tab="extensions" onclick="switchTab('extensions')"><span class="ico">&#129513;</span>Extensions</button>
+  <button class="nav-btn" data-tab="watchlist" onclick="switchTab('watchlist')"><span class="ico">&#11088;</span>Watchlist</button>
+</nav>
+
+<div id="toast" class="toast"></div>
+
+<script>
+const STORAGE_KEYS = {
+  extensions: 'bdixstream_extensions_v2',
+  watchlist: 'bdixstream_watchlist_v2'
+};
+
+const DEFAULT_EXTENSIONS = [
+  {
+    id: 'circle_ftp',
+    name: 'Circle FTP',
+    baseUrl: 'http://circleftp.net',
+    apiType: 'wordpress_rest',
+    latestPath: '/wp-json/wp/v2/posts?per_page=12&_embed',
+    searchPath: '/wp-json/wp/v2/posts?search={query}&per_page=15&_embed',
+    enabled: true
+  },
+  {
+    id: 'sam_online',
+    name: 'Sam Online',
+    baseUrl: 'http://172.16.50.4',
+    apiType: 'html_scrape',
+    latestPath: '/',
+    searchPath: '/?s={query}',
+    enabled: true
+  },
+  {
+    id: 'icc_ftp',
+    name: 'ICC FTP',
+    baseUrl: 'http://10.16.100.244',
+    apiType: 'html_scrape',
+    latestPath: '/',
+    searchPath: '/search?q={query}',
+    enabled: true
+  }
+];
+
+const DEMO_ITEMS = [
+  {
+    id: 'demo_sintel',
+    title: 'Sintel (4K Open Movie)',
+    source: 'Demo Server',
+    year: '2010',
+    poster: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Sintel_poster.jpg/440px-Sintel_poster.jpg',
+    sources: [
+      { label: 'HLS Auto', url: 'https://bitdash-a.akamaihd.net/content/sintel/hls/playlist.m3u8' },
+      { label: 'MP4 Direct', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4' }
+    ]
+  },
+  {
+    id: 'demo_tears',
+    title: 'Tears of Steel',
+    source: 'Demo Server',
+    year: '2012',
+    poster: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/96/Tears_of_Steel_poster.jpg/440px-Tears_of_Steel_poster.jpg',
+    sources: [
+      { label: 'MP4 1080p', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4' }
+    ]
+  },
+  {
+    id: 'demo_bunny',
+    title: 'Big Buck Bunny',
+    source: 'Demo Server',
+    year: '2008',
+    poster: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Big_buck_bunny_poster_big.jpg/440px-Big_buck_bunny_poster_big.jpg',
+    sources: [
+      { label: 'MP4 1080p', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4' }
+    ]
+  },
+  {
+    id: 'demo_elephants',
+    title: 'Elephants Dream',
+    source: 'Demo Server',
+    year: '2006',
+    poster: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Elephants_Dream_poster.jpg/440px-Elephants_Dream_poster.jpg',
+    sources: [
+      { label: 'MP4 HD', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4' }
+    ]
+  }
+];
+
+let extensions = loadJSON(STORAGE_KEYS.extensions, DEFAULT_EXTENSIONS);
+let watchlist = loadJSON(STORAGE_KEYS.watchlist, []);
+let liveItems = [];
+let activeFilter = 'all';
+let currentItem = null;
+let currentStreamUrl = '';
+let hlsInstance = null;
+
+// Native Android Bridge Promise Dispatcher
+const nativePending = {};
+let nativeReqSeq = 0;
+
+window.__bdixNativeCallback = function(requestId, payload) {
+  const resolver = nativePending[requestId];
+  if (resolver) {
+    delete nativePending[requestId];
+    resolver(payload);
+  }
+};
+
+window.__handleBack = function() {
+  if (document.getElementById('playerModal').classList.contains('open')) {
+    closePlayer();
+    return true;
+  }
+  if (document.getElementById('urlModal').classList.contains('open')) {
+    closeUrlModal();
+    return true;
+  }
+  const activeTab = document.querySelector('.view.active')?.id;
+  if (activeTab && activeTab !== 'view-home') {
+    switchTab('home');
+    return true;
+  }
+  return false;
+};
+
+function isNativeApp() {
+  return !!(window.BDIXNative && typeof window.BDIXNative.fetchUrlAsync === 'function');
+}
+
+async function smartFetch(url) {
+  if (isNativeApp()) {
+    return new Promise((resolve) => {
+      const id = 'req_' + (++nativeReqSeq);
+      const timer = setTimeout(() => {
+        delete nativePending[id];
+        resolve({ ok: false, status: 0, error: 'Request timed out (13s)' });
+      }, 13000);
+      nativePending[id] = (res) => {
+        clearTimeout(timer);
+        resolve(res);
+      };
+      window.BDIXNative.fetchUrlAsync(id, url);
+    });
+  }
+  try {
+    const resp = await fetch(url);
+    const text = await resp.text();
+    return { ok: resp.ok, status: resp.status, finalUrl: resp.url, text };
+  } catch (err) {
+    return { ok: false, status: 0, error: err.message + ' (Browser CORS/Mixed-Content blocked — works inside Android APK!)' };
+  }
+}
+
+function loadJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(fallback));
+  } catch {
+    return JSON.parse(JSON.stringify(fallback));
+  }
+}
+function saveExtensions() { localStorage.setItem(STORAGE_KEYS.extensions, JSON.stringify(extensions)); }
+function saveWatchlist() { localStorage.setItem(STORAGE_KEYS.watchlist, JSON.stringify(watchlist)); }
+
+function showToast(msg) {
+  if (isNativeApp() && window.BDIXNative.showToast) {
+    window.BDIXNative.showToast(msg);
+    return;
+  }
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(() => { el.style.display = 'none'; }, 2400);
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + tab).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  if (tab === 'extensions') renderExtensions();
+  if (tab === 'watchlist') renderWatchlist();
+}
+
+function stripHtml(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html || '';
+  return (tmp.textContent || tmp.innerText || '').trim();
+}
+
+function resolveUrl(base, href) {
+  try { return new URL(href, base).href; } catch { return href; }
+}
+
+function extractMediaFromHtml(html, baseUrl) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const found = [];
+  const seen = new Set();
+
+  doc.querySelectorAll('a[href], video source[src], video[src]').forEach(el => {
+    const raw = el.getAttribute('href') || el.getAttribute('src') || '';
+    if (!raw || raw.startsWith('#') || raw.startsWith('javascript:')) return;
+    const abs = resolveUrl(baseUrl, raw);
+    const isVideo = /\.(mp4|mkv|webm|m3u8|avi|mov)(\?|$)/i.test(abs);
+    if (isVideo && !seen.has(abs)) {
+      seen.add(abs);
+      const label = (el.textContent || '').trim().slice(0, 28) || abs.split('/').pop().slice(0, 28) || 'Direct Stream';
+      found.push({ label, url: abs });
+    }
+  });
+  return found;
+}
+
+function parseExtensionResponse(ext, text, fetchedUrl) {
+  const items = [];
+  if (ext.apiType === 'wordpress_rest') {
+    try {
+      const posts = JSON.parse(text);
+      if (Array.isArray(posts)) {
+        for (const p of posts) {
+          const title = stripHtml(p.title?.rendered || 'Untitled');
+          const contentHtml = p.content?.rendered || '';
+          const mediaSources = extractMediaFromHtml(contentHtml, ext.baseUrl);
+          let poster = '';
+          const embeddedMedia = p._embedded?.['wp:featuredmedia']?.[0]?.source_url;
+          if (embeddedMedia) poster = embeddedMedia;
+          else {
+            const imgMatch = contentHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
+            if (imgMatch) poster = resolveUrl(ext.baseUrl, imgMatch[1]);
+          }
+          items.push({
+            id: ext.id + '_' + p.id,
+            title,
+            source: ext.name,
+            year: (p.date || '').slice(0, 4),
+            poster,
+            pageUrl: p.link || fetchedUrl,
+            sources: mediaSources
+          });
+        }
+        return items;
+      }
+    } catch {
+      // Fallback to HTML scraping if WP JSON isn't returned
+    }
+  }
+
+  // Generic HTML Portal & Apache/Nginx FTP Directory Scraper
+  const doc = new DOMParser().parseFromString(text, 'text/html');
+  const seen = new Set();
+  const links = doc.querySelectorAll('a[href]');
+  links.forEach((a, idx) => {
+    const href = a.getAttribute('href') || '';
+    if (!href || href.startsWith('#') || href.startsWith('javascript:') || href === '../' || href === '/') return;
+    const abs = resolveUrl(fetchedUrl || ext.baseUrl, href);
+    const isVideo = /\.(mp4|mkv|webm|m3u8)(\?|$)/i.test(abs);
+    const img = a.querySelector('img');
+    const title = (a.getAttribute('title') || img?.getAttribute('alt') || a.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!title || title.length < 2) return;
+    if (!isVideo && !img && !/movie|film|series|watch|video|show|hindi|bangla|english|1080|720/i.test(abs + ' ' + title)) return;
+    if (seen.has(abs)) return;
+    seen.add(abs);
+    items.push({
+      id: ext.id + '_html_' + idx + '_' + title.slice(0, 12),
+      title: decodeURIComponent(title).replace(/\.(mp4|mkv|webm|m3u8)$/i, ''),
+      source: ext.name,
+      year: '',
+      poster: img ? resolveUrl(fetchedUrl || ext.baseUrl, img.getAttribute('src') || img.getAttribute('data-src') || '') : '',
+      pageUrl: isVideo ? '' : abs,
+      sources: isVideo ? [{ label: 'Direct FTP Stream', url: abs }] : []
+    });
+  });
+  return items.slice(0, 30);
+}
+
+async function fetchFromExtension(ext, query = '') {
+  const base = ext.baseUrl.replace(/\/+$/, '');
+  const path = query
+    ? (ext.searchPath || '/?s={query}').replace('{query}', encodeURIComponent(query))
+    : (ext.latestPath || '/');
+  const targetUrl = path.startsWith('http') ? path : base + (path.startsWith('/') ? path : '/' + path);
+  const res = await smartFetch(targetUrl);
+  if (!res.ok) {
+    return { ext, ok: false, error: res.error || ('HTTP ' + res.status), items: [] };
+  }
+  const items = parseExtensionResponse(ext, res.text, res.finalUrl || targetUrl);
+  return { ext, ok: true, items };
+}
+
+async function fetchAllEnabled() {
+  const enabled = extensions.filter(e => e.enabled);
+  const box = document.getElementById('liveStatusBox');
+  box.style.display = 'block';
+  if (!enabled.length) {
+    box.textContent = 'No extensions enabled. Enable a server in the Extensions tab.';
+    return;
+  }
+  box.textContent = 'Fetching catalogs from ' + enabled.map(e => e.name).join(', ') + '...';
+  const results = await Promise.all(enabled.map(ext => fetchFromExtension(ext)));
+  liveItems = [];
+  const logs = [];
+  for (const r of results) {
+    if (r.ok) {
+      liveItems.push(...r.items);
+      logs.push(`✅ ${r.ext.name}: ${r.items.length} items`);
+    } else {
+      logs.push(`❌ ${r.ext.name}: ${r.error}`);
+    }
+  }
+  box.innerHTML = logs.join('<br>');
+  renderHome();
+}
+
+async function runGlobalSearch() {
+  const q = document.getElementById('searchInput').value.trim();
+  const status = document.getElementById('searchStatus');
+  const grid = document.getElementById('searchGrid');
+  if (!q) return;
+
+  status.style.display = 'block';
+  status.textContent = `Searching "${q}" across enabled extensions...`;
+
+  // Filter local demo + already fetched items immediately
+  const localMatches = [...liveItems, ...DEMO_ITEMS].filter(i =>
+    i.title.toLowerCase().includes(q.toLowerCase())
+  );
+
+  const enabled = extensions.filter(e => e.enabled);
+  const results = await Promise.all(enabled.map(ext => fetchFromExtension(ext, q)));
+  const remoteMatches = [];
+  const logs = [];
+  for (const r of results) {
+    if (r.ok) {
+      remoteMatches.push(...r.items);
+      logs.push(`✅ ${r.ext.name}: ${r.items.length} matches`);
+    } else {
+      logs.push(`❌ ${r.ext.name}: ${r.error}`);
+    }
+  }
+  status.innerHTML = logs.join('<br>');
+
+  const merged = [...remoteMatches, ...localMatches];
+  if (!merged.length) {
+    grid.innerHTML = '<div class="empty" style="grid-column:1/-1;">No results found. Make sure you are connected to a BDIX ISP network or try another keyword.</div>';
+    return;
+  }
+  renderCards(grid, merged);
+}
+
+function renderCards(container, items) {
+  container.innerHTML = '';
+  if (!items.length) {
+    container.innerHTML = '<div class="empty" style="grid-column:1/-1;">Nothing here yet.</div>';
+    return;
+  }
+  items.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.onclick = () => openItem(item);
+    const posterHtml = item.poster
+      ? `<img src="${escapeAttr(item.poster)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block';" /><div class="poster-fallback" style="display:none;">${escapeHtml(item.title)}</div>`
+      : `<div class="poster-fallback">${escapeHtml(item.title)}</div>`;
+    card.innerHTML = `
+      <div class="poster">
+        ${posterHtml}
+        <span class="card-tag">${escapeHtml(item.source || 'BDIX')}</span>
+      </div>
+      <div class="card-body">
+        <div class="card-title">${escapeHtml(item.title)}</div>
+        <div class="card-meta">
+          <span>${escapeHtml(item.year || (item.sources?.length ? item.sources.length + ' stream(s)' : 'Portal'))}</span>
+          <span>&#9654;</span>
+        </div>
+      </div>`;
+    container.appendChild(card);
+  });
+}
+
+function renderPills() {
+  const pills = document.getElementById('serverPills');
+  const names = ['all', ...extensions.filter(e => e.enabled).map(e => e.name), 'Demo Server'];
+  pills.innerHTML = '';
+  names.forEach(name => {
+    const b = document.createElement('button');
+    b.className = 'pill' + (activeFilter === name ? ' active' : '');
+    b.textContent = name === 'all' ? 'All Servers' : name;
+    b.onclick = () => { activeFilter = name; renderHome(); };
+    pills.appendChild(b);
+  });
+}
+
+function renderHome() {
+  renderPills();
+  const liveSec = document.getElementById('liveCatalogSection');
+  const filteredLive = activeFilter === 'all' ? liveItems : liveItems.filter(i => i.source === activeFilter);
+  if (liveItems.length) {
+    liveSec.style.display = 'block';
+    document.getElementById('liveCount').textContent = filteredLive.length + ' titles';
+    renderCards(document.getElementById('liveGrid'), filteredLive);
+  } else {
+    liveSec.style.display = 'none';
+  }
+  const filteredDemo = (activeFilter === 'all' || activeFilter === 'Demo Server') ? DEMO_ITEMS : [];
+  renderCards(document.getElementById('demoGrid'), filteredDemo);
+}
+
+async function openItem(item) {
+  currentItem = JSON.parse(JSON.stringify(item));
+  document.getElementById('modalTitle').textContent = currentItem.title;
+  document.getElementById('modalSub').textContent = currentItem.source + (currentItem.year ? ' • ' + currentItem.year : '');
+  document.getElementById('playerModal').classList.add('open');
+  document.getElementById('btnOpenPortal').style.display = currentItem.pageUrl ? 'inline-flex' : 'none';
+  updateWatchlistButton();
+
+  const note = document.getElementById('playerNote');
+  note.style.display = 'none';
+
+  // If item came from a portal link without direct video URL yet, scrape its movie page on the fly!
+  if ((!currentItem.sources || !currentItem.sources.length) && currentItem.pageUrl) {
+    note.style.display = 'block';
+    note.textContent = 'Extracting video links from ' + currentItem.pageUrl + '...';
+    const res = await smartFetch(currentItem.pageUrl);
+    if (res.ok) {
+      const extracted = extractMediaFromHtml(res.text, res.finalUrl || currentItem.pageUrl);
+      if (extracted.length) {
+        currentItem.sources = extracted;
+        note.style.display = 'none';
+      } else {
+        note.textContent = 'No direct .mp4/.mkv/.m3u8 tag found on this page. Tap "Open Portal Page" to browse it directly.';
+      }
+    } else {
+      note.textContent = 'Could not inspect movie page: ' + (res.error || 'HTTP ' + res.status);
+    }
+  }
+
+  renderSources();
+  if (currentItem.sources && currentItem.sources.length) {
+    playStream(currentItem.sources[0].url, 0);
+  } else {
+    stopVideo();
+  }
+}
+
+function renderSources() {
+  const list = document.getElementById('sourceList');
+  list.innerHTML = '';
+  (currentItem.sources || []).forEach((s, idx) => {
+    const chip = document.createElement('button');
+    chip.className = 'source-chip' + (idx === 0 ? ' active' : '');
+    chip.textContent = s.label || ('Server ' + (idx + 1));
+    chip.onclick = () => playStream(s.url, idx);
+    list.appendChild(chip);
+  });
+}
+
+function playStream(url, activeIdx) {
+  currentStreamUrl = url;
+  document.querySelectorAll('#sourceList .source-chip').forEach((c, i) => c.classList.toggle('active', i === activeIdx));
+  const video = document.getElementById('videoPlayer');
+  const note = document.getElementById('playerNote');
+  stopVideo();
+
+  if (/\.mkv(\?|$)/i.test(url)) {
+    note.style.display = 'block';
+    note.textContent = 'Note: MKV audio codecs (AC3/DTS) may not play in built-in WebView player. Tap "Open in VLC" or "MX Player" for full MKV + dual-audio support!';
+  } else {
+    note.style.display = 'none';
+  }
+
+  if (url.includes('.m3u8') && window.Hls && Hls.isSupported()) {
+    hlsInstance = new Hls();
+    hlsInstance.loadSource(url);
+    hlsInstance.attachMedia(video);
+    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+  } else {
+    video.src = url;
+    video.play().catch(() => {});
+  }
+}
+
+function stopVideo() {
+  const video = document.getElementById('videoPlayer');
+  if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+  video.pause();
+  video.removeAttribute('src');
+  video.load();
+}
+
+function closePlayer() {
+  stopVideo();
+  document.getElementById('playerModal').classList.remove('open');
+}
+
+function openInExternal(pkg) {
+  if (!currentStreamUrl) { showToast('No stream URL selected'); return; }
+  if (isNativeApp() && window.BDIXNative.openExternalPlayer) {
+    window.BDIXNative.openExternalPlayer(currentStreamUrl, currentItem?.title || 'BDIXStream', pkg);
+    return;
+  }
+  window.open(currentStreamUrl, '_blank');
+}
+
+function openCurrentPortal() {
+  if (!currentItem?.pageUrl) return;
+  if (isNativeApp() && window.BDIXNative.openInBrowser) {
+    window.BDIXNative.openInBrowser(currentItem.pageUrl);
+  } else {
+    window.open(currentItem.pageUrl, '_blank');
+  }
+}
+
+function copyCurrentStream() {
+  const url = currentStreamUrl || currentItem?.pageUrl;
+  if (!url) return;
+  if (isNativeApp() && window.BDIXNative.copyText) {
+    window.BDIXNative.copyText(url);
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(url);
+    showToast('Stream URL copied');
+  }
+}
+
+function loadSubtitleFile(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let text = reader.result || '';
+    if (file.name.toLowerCase().endsWith('.srt')) {
+      text = 'WEBVTT\n\n' + text.replace(/\r+/g, '').replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
+    }
+    const blobUrl = URL.createObjectURL(new Blob([text], { type: 'text/vtt' }));
+    const video = document.getElementById('videoPlayer');
+    video.querySelectorAll('track').forEach(t => t.remove());
+    const track = document.createElement('track');
+    track.kind = 'subtitles';
+    track.label = file.name;
+    track.srclang = 'en';
+    track.src = blobUrl;
+    track.default = true;
+    video.appendChild(track);
+    showToast('Subtitle loaded: ' + file.name);
+  };
+  reader.readAsText(file);
+}
+
+// Watchlist
+function updateWatchlistButton() {
+  if (!currentItem) return;
+  const exists = watchlist.some(w => w.id === currentItem.id);
+  document.getElementById('btnWatchlistToggle').textContent = exists ? '★ Saved' : '☆ Watchlist';
+}
+function toggleCurrentWatchlist() {
+  if (!currentItem) return;
+  const idx = watchlist.findIndex(w => w.id === currentItem.id);
+  if (idx >= 0) { watchlist.splice(idx, 1); showToast('Removed from Watchlist'); }
+  else { watchlist.unshift(currentItem); showToast('Added to Watchlist'); }
+  saveWatchlist();
+  updateWatchlistButton();
+}
+function clearWatchlist() {
+  watchlist = [];
+  saveWatchlist();
+  renderWatchlist();
+  showToast('Watchlist cleared');
+}
+function renderWatchlist() {
+  renderCards(document.getElementById('watchlistGrid'), watchlist);
+}
+
+// Direct URL Modal
+function openDirectUrlModal() { document.getElementById('urlModal').classList.add('open'); }
+function closeUrlModal() { document.getElementById('urlModal').classList.remove('open'); }
+function playDirectStream() {
+  const url = document.getElementById('directStreamInput').value.trim();
+  if (!url) { showToast('Enter a stream URL'); return; }
+  const title = document.getElementById('directStreamTitle').value.trim() || url.split('/').pop() || 'Direct Stream';
+  closeUrlModal();
+  openItem({ id: 'direct_' + Date.now(), title, source: 'Direct URL', sources: [{ label: 'Direct Stream', url }] });
+}
+
+// Extensions Manager
+function renderExtensions() {
+  document.getElementById('extCount').textContent = extensions.length;
+  const list = document.getElementById('extensionsList');
+  list.innerHTML = '';
+  extensions.forEach((ext, idx) => {
+    const el = document.createElement('div');
+    el.className = 'ext-item';
+    el.innerHTML = `
+      <div class="ext-info">
+        <div class="ext-name">
+          <span class="status-dot ${ext.enabled ? '' : 'off'}"></span>
+          ${escapeHtml(ext.name)}
+          <span style="font-size:0.68rem;color:var(--accent2);font-weight:600;">${escapeHtml(ext.apiType)}</span>
+        </div>
+        <div class="ext-url">${escapeHtml(ext.baseUrl)}</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-secondary btn-sm" onclick="toggleExt(${idx})">${ext.enabled ? 'Disable' : 'Enable'}</button>
+        <button class="btn-cyan btn-sm" onclick="editExtUrl(${idx})">Edit IP</button>
+        <button class="btn-danger btn-sm" onclick="removeExt(${idx})">Remove</button>
+      </div>`;
+    list.appendChild(el);
+  });
+}
+
+function toggleExt(idx) {
+  extensions[idx].enabled = !extensions[idx].enabled;
+  saveExtensions();
+  renderExtensions();
+  renderHome();
+}
+function editExtUrl(idx) {
+  const updated = prompt('Enter new server URL for ' + extensions[idx].name + ':', extensions[idx].baseUrl);
+  if (updated && updated.trim()) {
+    extensions[idx].baseUrl = updated.trim();
+    saveExtensions();
+    renderExtensions();
+    showToast('Updated ' + extensions[idx].name);
+  }
+}
+function removeExt(idx) {
+  extensions.splice(idx, 1);
+  saveExtensions();
+  renderExtensions();
+  renderHome();
+}
+function addCustomExtension() {
+  const name = document.getElementById('newExtName').value.trim();
+  const baseUrl = document.getElementById('newExtUrl').value.trim();
+  const apiType = document.getElementById('newExtType').value;
+  const searchPath = document.getElementById('newExtSearch').value.trim() || '/?s={query}';
+  if (!name || !baseUrl) { showToast('Enter both Name and Base URL'); return; }
+  extensions.push({
+    id: 'ext_' + Date.now(),
+    name,
+    baseUrl,
+    apiType,
+    latestPath: apiType === 'wordpress_rest' ? '/wp-json/wp/v2/posts?per_page=12&_embed' : '/',
+    searchPath: apiType === 'wordpress_rest' ? '/wp-json/wp/v2/posts?search={query}&per_page=15&_embed' : searchPath,
+    enabled: true
+  });
+  saveExtensions();
+  document.getElementById('newExtName').value = '';
+  document.getElementById('newExtUrl').value = '';
+  renderExtensions();
+  renderHome();
+  showToast('Added ' + name);
+}
+function resetDefaultExtensions() {
+  extensions = JSON.parse(JSON.stringify(DEFAULT_EXTENSIONS));
+  saveExtensions();
+  renderExtensions();
+  renderHome();
+  showToast('Default extensions restored');
+}
+
+function normalizeGithubRawUrl(url) {
+  return url
+    .replace(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/i, 'https://raw.githubusercontent.com/$1/$2/$3')
+    .trim();
+}
+
+async function installGithubRepo() {
+  const rawInput = document.getElementById('repoUrlInput').value.trim();
+  if (!rawInput) { showToast('Paste a GitHub repo.json URL'); return; }
+  const url = normalizeGithubRawUrl(rawInput);
+  showToast('Loading repository...');
+  const res = await smartFetch(url);
+  if (!res.ok) {
+    showToast('Failed to load repo: ' + (res.error || res.status));
+    return;
+  }
+  try {
+    const data = JSON.parse(res.text);
+    const plugins = Array.isArray(data) ? data : (data.plugins || data.extensions || []);
+    if (!plugins.length) { showToast('No plugins found in repo.json'); return; }
+    let added = 0;
+    for (const p of plugins) {
+      if (!p.name || !p.baseUrl) continue;
+      const existing = extensions.findIndex(e => e.id === p.id || e.baseUrl === p.baseUrl);
+      const entry = {
+        id: p.id || ('gh_' + Date.now() + '_' + added),
+        name: p.name,
+        baseUrl: p.baseUrl,
+        apiType: p.apiType || 'html_scrape',
+        latestPath: p.latestPath || '/',
+        searchPath: p.searchPath || '/?s={query}',
+        enabled: true
+      };
+      if (existing >= 0) extensions[existing] = entry;
+      else extensions.push(entry);
+      added++;
+    }
+    saveExtensions();
+    renderExtensions();
+    renderHome();
+    document.getElementById('repoUrlInput').value = '';
+    showToast(`Installed ${added} extension(s) from GitHub!`);
+  } catch (e) {
+    showToast('Invalid JSON format in repo.json');
+  }
+}
+
+function exportRepoJson() {
+  const manifest = JSON.stringify({
+    repoName: 'My BDIXStream Extensions',
+    version: 1,
+    plugins: extensions.map(({ id, name, baseUrl, apiType, latestPath, searchPath }) => ({
+      id, name, baseUrl, apiType, latestPath, searchPath
+    }))
+  }, null, 2);
+  if (isNativeApp() && window.BDIXNative.copyText) {
+    window.BDIXNative.copyText(manifest);
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(manifest);
+    showToast('repo.json copied! Upload it to GitHub.');
+  }
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+// Init
+(function init() {
+  const badge = document.getElementById('runtimeBadge');
+  if (isNativeApp()) {
+    badge.textContent = 'Native APK • CORS Free';
+    badge.className = 'badge badge-native';
+  }
+  renderHome();
+})();
+</script>
+</body>
+</html>
